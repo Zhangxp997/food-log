@@ -4945,6 +4945,47 @@ body { padding-bottom: calc(108px + env(safe-area-inset-bottom, 0px)); }
   }
 
   /* ---------------- init ---------------- */
+  /* ---------------- 从网址自动导入（给快捷指令用） ----------------
+     #h=<Base64(UTF-8 文本)>  推荐，中文和竖线都不用转义
+     #t=<URL 编码的原文>       不方便转 Base64 时用
+     导入完立刻把 hash 抹掉，避免刷新页面重复导入 */
+  function b64ToText(b64) {
+    var s = String(b64).replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, '');
+    while (s.length % 4) s += '=';
+    var bin = window.atob(s);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    if (window.TextDecoder) {
+      try { return new TextDecoder('utf-8').decode(bytes); } catch (e) {}
+    }
+    return decodeURIComponent(escape(bin));
+  }
+
+  function textFromHash() {
+    var h = String(window.location.hash || '').replace(/^#/, '');
+    if (!h) return '';
+    var seg = h.split('&');
+    for (var i = 0; i < seg.length; i++) {
+      var isB64 = seg[i].indexOf('h=') === 0;
+      var isRaw = seg[i].indexOf('t=') === 0;
+      if (!isB64 && !isRaw) continue;
+      var val = seg[i].slice(2);
+      try {
+        return isB64 ? b64ToText(decodeURIComponent(val)) : decodeURIComponent(val);
+      } catch (e) { return ''; }
+    }
+    return '';
+  }
+
+  function importFromHash() {
+    var text = textFromHash();
+    if (!text) return false;
+    try { window.history.replaceState(null, '', window.location.pathname + window.location.search); } catch (e) {}
+    importHealthText(text, false);
+    setView('today');
+    return true;
+  }
+
   function init() {
     state.viewDate = dateKey(new Date());
     loadLocal();
@@ -4962,6 +5003,8 @@ body { padding-bottom: calc(108px + env(safe-area-inset-bottom, 0px)); }
     });
     bind();
     setView('today');
+    importFromHash();
+    window.addEventListener('hashchange', function () { importFromHash(); });
   }
 
   if (document.readyState === 'loading') {
